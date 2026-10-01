@@ -4,11 +4,18 @@ import random
 import time
 import base64
 import os
+import unicodedata
 
 st.set_page_config(page_title="化学式・化学反応式クイズ", page_icon="🧪")
 
+# 全角英数字・記号を半角に正規化する関数
+def normalize_str(text):
+    if not text:
+        return ""
+    return unicodedata.normalize('NFKC', str(text)).strip()
+
 # --------------------------------------------------
-# 背景動的設定関数（最上部ヘッダー透明化＆背景透過）
+# 背景動的設定関数（最上部ヘッダー透明化＆入力欄視認性向上）
 # --------------------------------------------------
 def set_background(image_file, is_title=False):
     if os.path.exists(image_file):
@@ -16,7 +23,6 @@ def set_background(image_file, is_title=False):
             data = f.read()
         b64_data = base64.b64encode(data).decode()
         
-        # タイトル画面の場合はカード位置を下げてロゴを露出
         top_margin = "200px" if is_title else "80px"
         
         st.markdown(
@@ -27,7 +33,7 @@ def set_background(image_file, is_title=False):
                 background-color: transparent !important;
             }}
             
-            /* アプリ全体の最上部背景を透明にして画像を上端まで全面表示 */
+            /* アプリ全体の最上部背景 */
             .stApp {{
                 background-image: url("data:image/png;base64,{b64_data}");
                 background-size: cover;
@@ -37,7 +43,7 @@ def set_background(image_file, is_title=False):
                 background-color: transparent !important;
             }}
             
-            /* 中央メインカード：適度な透過性(0.85)とサイズの最適化 */
+            /* 中央メインカード */
             [data-testid="stMainBlockContainer"] {{
                 background-color: rgba(255, 255, 255, 0.85) !important;
                 padding: 2rem 2.5rem !important;
@@ -49,17 +55,43 @@ def set_background(image_file, is_title=False):
                 backdrop-filter: blur(4px);
             }}
             
-            /* テキストカラーとドロップシャドウ */
-            [data-testid="stMainBlockContainer"] * {{
+            /* 通常テキスト */
+            [data-testid="stMainBlockContainer"] p, 
+            [data-testid="stMainBlockContainer"] h1, 
+            [data-testid="stMainBlockContainer"] h2, 
+            [data-testid="stMainBlockContainer"] h3, 
+            [data-testid="stMainBlockContainer"] span {{
                 color: #111111 !important;
-                text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
             }}
-            
+
+            /* テキスト入力欄の完全固定（ライト/ダークモード問わず濃い紺背景に白文字） */
+            .stTextInput input {{
+                color: #ffffff !important;
+                background-color: #2b2d42 !important;
+                -webkit-text-fill-color: #ffffff !important;
+                font-weight: bold !important;
+                font-size: 1.1rem !important;
+            }}
+
+            .stTextInput div[data-baseweb="input"] {{
+                background-color: #2b2d42 !important;
+                border: 2px solid #4a4e69 !important;
+                border-radius: 8px !important;
+            }}
+
+            .stTextInput div[data-baseweb="input"]:focus-within {{
+                border-color: #7209b7 !important;
+                background-color: #2b2d42 !important;
+            }}
+
+            .stTextInput input::placeholder {{
+                color: #a0a0a0 !important;
+            }}
+
             /* ボタンデザイン */
             .stButton > button {{
                 border-radius: 8px !important;
                 font-weight: bold !important;
-                background-color: rgba(255, 255, 255, 0.9) !important;
             }}
             </style>
             """,
@@ -88,12 +120,13 @@ def load_questions():
             "title": title,
         }
         if q_type == "equation":
-            q_data["left_coef"] = [x.strip() for x in str(row["left_coef"]).split(",") if x.strip()]
-            q_data["left_sub"] = [x.strip() for x in str(row["left_substance"]).split(",") if x.strip()]
-            q_data["right_coef"] = [x.strip() for x in str(row["right_coef"]).split(",") if x.strip()]
-            q_data["right_sub"] = [x.strip() for x in str(row["right_substance"]).split(",") if x.strip()]
+            q_data["left_coef"] = [normalize_str(x) for x in str(row["left_coef"]).split(",") if x.strip()]
+            q_data["left_sub"] = [normalize_str(x).lstrip('0123456789') for x in str(row["left_substance"]).split(",") if x.strip()]
+            
+            q_data["right_coef"] = [normalize_str(x) for x in str(row["right_coef"]).split(",") if x.strip()]
+            q_data["right_sub"] = [normalize_str(x).lstrip('0123456789') for x in str(row["right_substance"]).split(",") if x.strip()]
         else:
-            q_data["correct"] = str(row["correct_answer"]).strip()
+            q_data["correct"] = normalize_str(row["correct_answer"])
         questions.append(q_data)
     return questions
 
@@ -189,11 +222,11 @@ else:
     # 5. 問題フォーム
     if q["type"] == "single":
         st.write("該当する化学式を入力してください。")
-        user_input = st.text_input("解答欄", key=f"single_{q['id']}_{st.session_state.q_index}").strip()
+        user_input = normalize_str(st.text_input("解答欄", key=f"single_{q['id']}_{st.session_state.q_index}"))
         
         if st.button("答え合わせ", type="primary", disabled=st.session_state.answered):
             st.session_state.answered = True
-            if user_input == q["correct"]:
+            if user_input == normalize_str(q["correct"]):
                 st.success("🎉 正解です！試験管に液体が溜まりました！")
                 st.session_state.score += 1
             else:
@@ -207,7 +240,7 @@ else:
             for i in range(len(q["left_sub"])):
                 with cols_l[i * 2]:
                     val = st.text_input(f"左係数_{i}", key=f"l_c_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed", placeholder="係数")
-                    left_inputs.append(val.strip())
+                    left_inputs.append(normalize_str(val))
                 with cols_l[i * 2 + 1]:
                     st.write(f"**{q['left_sub'][i]}**" + (" ＋ " if i < len(q["left_sub"]) - 1 else ""))
 
@@ -218,7 +251,7 @@ else:
             for i in range(len(q["right_sub"])):
                 with cols_r[i * 2]:
                     val = st.text_input(f"右係数_{i}", key=f"r_c_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed", placeholder="係数")
-                    right_inputs.append(val.strip())
+                    right_inputs.append(normalize_str(val))
                 with cols_r[i * 2 + 1]:
                     st.write(f"**{q['right_sub'][i]}**" + (" ＋ " if i < len(q["right_sub"]) - 1 else ""))
 
@@ -238,15 +271,16 @@ else:
 
         else:  # 上級編
             st.write("各枠に適切な**化学式（係数含む）**を入力してください。")
-            correct_left = [(c if c != "1" else "") + s for c, s in zip(q["left_coef"], q["left_sub"])]
-            correct_right = [(c if c != "1" else "") + s for c, s in zip(q["right_coef"], q["right_sub"])]
+            
+            correct_left = [normalize_str((c if c != "1" else "") + s) for c, s in zip(q["left_coef"], q["left_sub"])]
+            correct_right = [normalize_str((c if c != "1" else "") + s) for c, s in zip(q["right_coef"], q["right_sub"])]
 
             left_inputs = []
             cols_l = st.columns(len(q["left_sub"]) * 2 - 1)
             for i in range(len(q["left_sub"])):
                 with cols_l[i * 2]:
                     val = st.text_input(f"左_{i}", key=f"l_f_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed")
-                    left_inputs.append(val.strip())
+                    left_inputs.append(normalize_str(val))
                 if i < len(q["left_sub"]) - 1:
                     with cols_l[i * 2 + 1]:
                         st.markdown("### ＋")
@@ -258,13 +292,14 @@ else:
             for i in range(len(q["right_sub"])):
                 with cols_r[i * 2]:
                     val = st.text_input(f"右_{i}", key=f"r_f_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed")
-                    right_inputs.append(val.strip())
+                    right_inputs.append(normalize_str(val))
                 if i < len(q["right_sub"]) - 1:
                     with cols_r[i * 2 + 1]:
                         st.markdown("### ＋")
 
             if st.button("答え合わせ", type="primary", disabled=st.session_state.answered):
                 st.session_state.answered = True
+                
                 if set(left_inputs) == set(correct_left) and set(right_inputs) == set(correct_right):
                     st.success("🎉 正解です！試験管に液体が溜まりました！")
                     st.session_state.score += 1
