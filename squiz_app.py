@@ -8,7 +8,7 @@ import os
 st.set_page_config(page_title="化学式・化学反応式クイズ", page_icon="🧪")
 
 # --------------------------------------------------
-# 背景動的設定関数（画面ごとに画像ファイルを切り替え）
+# 背景動的設定関数（画面ごとに背景とスタイルを調整）
 # --------------------------------------------------
 def set_background(image_file):
     if os.path.exists(image_file):
@@ -25,12 +25,19 @@ def set_background(image_file):
                 background-repeat: no-repeat;
                 background-attachment: fixed;
             }}
+            /* 中央カード部分：背景画像をしっかり隠して文字を見やすくする */
             .main .block-container {{
-                background-color: rgba(255, 255, 255, 0.90);
-                padding: 2rem;
-                border-radius: 16px;
-                margin-top: 1rem;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                background-color: rgba(255, 255, 255, 0.93) !important;
+                padding: 2.5rem !important;
+                border-radius: 20px !important;
+                margin-top: 3rem !important;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+            }}
+            /* テキストカラーの強制適用 */
+            .main .block-container h1, .main .block-container h2, 
+            .main .block-container h3, .main .block-container p, 
+            .main .block-container span, .main .block-container label {{
+                color: #1e1e1e !important;
             }}
             </style>
             """,
@@ -42,12 +49,21 @@ def set_background(image_file):
 def load_questions():
     df = pd.read_csv("questions.csv").fillna("")
     questions = []
-    for _, row in df.iterrows():
-        q_type = str(row["type"]).strip()
+    for idx, row in df.iterrows():
+        q_type = str(row.get("type", "")).strip()
+        title = str(row.get("title", "")).strip()
+        if not q_type or not title:
+            continue
+
+        try:
+            q_id = int(row["id"])
+        except (ValueError, TypeError):
+            q_id = idx + 1
+
         q_data = {
-            "id": int(row["id"]),
+            "id": q_id,
             "type": q_type,
-            "title": str(row["title"]),
+            "title": title,
         }
         if q_type == "equation":
             q_data["left_coef"] = [x.strip() for x in str(row["left_coef"]).split(",") if x.strip()]
@@ -70,54 +86,52 @@ if "q_index" not in st.session_state:
     st.session_state.q_index = 0
 if "score" not in st.session_state:
     st.session_state.score = 0
-if "start_time" not in st.session_state:
-    st.session_state.start_time = None
 if "time_limit" not in st.session_state:
     st.session_state.time_limit = 30
+if "q_start_time" not in st.session_state:
+    st.session_state.q_start_time = None
 if "answered" not in st.session_state:
     st.session_state.answered = False
 
 # --------------------------------------------------
-# 画面1: オープニング画面（タイトル用背景を表示）
+# 画面1: オープニング画面
 # --------------------------------------------------
 if st.session_state.level is None:
-    # タイトル画面用の背景を設定（タイトル用画像が存在しない場合は既存の bg.jpg 等を使用）
     set_background("title_bg.jpg")
 
-    st.title("🧪 化学式・化学反応式クイズ")
-    st.subheader("挑戦するコースを選択してください")
+    # 画像内のタイトル用のスペース（余白）を確保
+    st.markdown("<div style='margin-top: 100px;'></div>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #333;'>コースを選択してください</h3>", unsafe_allow_html=True)
+    
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("🌱 初級編\n(制限時間 30秒 / 係数のみ)", use_container_width=True):
+        if st.button("🌱 初級編\n(1問 30秒 / 係数のみ)", use_container_width=True):
             st.session_state.level = "初級"
             st.session_state.time_limit = 30
             st.session_state.shuffled_questions = random.sample(all_questions, len(all_questions))
             st.session_state.q_index = 0
             st.session_state.score = 0
-            st.session_state.start_time = time.time()
+            st.session_state.q_start_time = time.time()  # 1問目のタイマー開始
             st.session_state.answered = False
             st.rerun()
             
     with col2:
-        if st.button("🔥 上級編\n(制限時間 60秒 / 完全解答)", use_container_width=True):
+        if st.button("🔥 上級編\n(1問 60秒 / 完全解答)", use_container_width=True):
             st.session_state.level = "上級"
             st.session_state.time_limit = 60
             st.session_state.shuffled_questions = random.sample(all_questions, len(all_questions))
             st.session_state.q_index = 0
             st.session_state.score = 0
-            st.session_state.start_time = time.time()
+            st.session_state.q_start_time = time.time()  # 1問目のタイマー開始
             st.session_state.answered = False
             st.rerun()
 
 # --------------------------------------------------
-# 画面2: クイズ出題画面（ゲーム用背景を表示）
+# 画面2: クイズ出題画面
 # --------------------------------------------------
 else:
-    # ゲーム画面用の背景を設定
     set_background("game_bg.jpg")
-
-    st.title("🧪 化学式・化学反応式クイズ")
 
     # 1. サイドバー（途中退出ボタン）
     st.sidebar.markdown(f"### コース: {st.session_state.level}編")
@@ -125,137 +139,129 @@ else:
         st.session_state.level = None
         st.rerun()
 
-    # 2. 制限時間（タイマー）計算
-    elapsed_time = time.time() - st.session_state.start_time
+    # 2. 1問あたりの制限時間計算
+    elapsed_time = time.time() - st.session_state.q_start_time
     remaining_time = max(0, int(st.session_state.time_limit - elapsed_time))
 
     # 3. 試験管メーター（プログレスバー）計算
     total_q_count = len(st.session_state.shuffled_questions)
     gauge_ratio = (st.session_state.score % total_q_count) / total_q_count if total_q_count > 0 else 0.0
 
-    # 画面上部インフォメーション表示
+    # 上部インフォメーション表示
     col_t1, col_t2 = st.columns([1, 1])
     with col_t1:
-        st.metric(label="⏱ 制限時間", value=f"{remaining_time} 秒")
+        st.metric(label="⏱ この問題の残り時間", value=f"{remaining_time} 秒")
     with col_t2:
         st.metric(label="🧪 試験管の液体", value=f"{int(gauge_ratio * 100)} %")
     
-    # 試験管メーター
     st.progress(gauge_ratio, text=f"🧪 試薬蓄積度: 正解数 {st.session_state.score} 問")
-
     st.markdown("---")
 
-    # 4. タイムアップ判定
-    if remaining_time <= 0:
-        st.error("⏰ タイムアップ！制限時間終了です。")
-        st.balloons()
-        st.subheader(f"🎉 最終スコア: {st.session_state.score} 問正解！")
-        if st.button("タイトルに戻る", type="primary"):
-            st.session_state.level = None
-            st.rerun()
+    q_list = st.session_state.shuffled_questions
+    q = q_list[st.session_state.q_index]
 
-    # 5. 通常の問題出題
+    st.subheader(f"問題 {st.session_state.q_index + 1}: {q['title']}")
+
+    # 4. 時間切れ判定（この問の制限時間が切れた場合）
+    if remaining_time <= 0 and not st.session_state.answered:
+        st.session_state.answered = True
+        st.error("⏰ 時間切れ！次の問題に進みましょう。")
+
+    # 5. 問題の表示処理
+    if q["type"] == "single":
+        st.write("該当する化学式を入力してください。")
+        user_input = st.text_input("解答欄", key=f"single_{q['id']}_{st.session_state.q_index}").strip()
+        
+        if st.button("答え合わせ", type="primary", disabled=st.session_state.answered):
+            st.session_state.answered = True
+            if user_input == q["correct"]:
+                st.success("🎉 正解です！試験管に液体が溜まりました！")
+                st.session_state.score += 1
+            else:
+                st.error(f"❌ 不正解です。 正解: **{q['correct']}**")
+
     else:
-        q_list = st.session_state.shuffled_questions
-        q = q_list[st.session_state.q_index]
+        if st.session_state.level == "初級":
+            st.write("化学反応式の**係数（□に入る数字）**を入力してください。（1の場合は空欄可）")
+            left_inputs = []
+            cols_l = st.columns(len(q["left_sub"]) * 2)
+            for i in range(len(q["left_sub"])):
+                with cols_l[i * 2]:
+                    val = st.text_input(f"左係数_{i}", key=f"l_c_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed", placeholder="係数")
+                    left_inputs.append(val.strip())
+                with cols_l[i * 2 + 1]:
+                    st.write(f"**{q['left_sub'][i]}**" + (" ＋ " if i < len(q["left_sub"]) - 1 else ""))
 
-        st.subheader(f"問題 {st.session_state.q_index + 1}: {q['title']}")
+            st.markdown("### ➔")
 
-        # --- 単純化学式問題 (single) ---
-        if q["type"] == "single":
-            st.write("該当する化学式を入力してください。")
-            user_input = st.text_input("解答欄", key=f"single_{q['id']}_{st.session_state.q_index}").strip()
-            
+            right_inputs = []
+            cols_r = st.columns(len(q["right_sub"]) * 2)
+            for i in range(len(q["right_sub"])):
+                with cols_r[i * 2]:
+                    val = st.text_input(f"右係数_{i}", key=f"r_c_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed", placeholder="係数")
+                    right_inputs.append(val.strip())
+                with cols_r[i * 2 + 1]:
+                    st.write(f"**{q['right_sub'][i]}**" + (" ＋ " if i < len(q["right_sub"]) - 1 else ""))
+
             if st.button("答え合わせ", type="primary", disabled=st.session_state.answered):
                 st.session_state.answered = True
-                if user_input == q["correct"]:
+                l_ans = [inp if inp != "" else "1" for inp in left_inputs]
+                r_ans = [inp if inp != "" else "1" for inp in right_inputs]
+                
+                if l_ans == q["left_coef"] and r_ans == q["right_coef"]:
                     st.success("🎉 正解です！試験管に液体が溜まりました！")
                     st.session_state.score += 1
                 else:
-                    st.error(f"❌ 不正解です。 正解: **{q['correct']}**")
+                    st.error("❌ 不正解です。")
+                    l_str = " + ".join([(c if c!='1' else '') + s for c, s in zip(q['left_coef'], q['left_sub'])])
+                    r_str = " + ".join([(c if c!='1' else '') + s for c, s in zip(q['right_coef'], q['right_sub'])])
+                    st.info(f"💡 正解: **{l_str} ➔ {r_str}**")
 
-        # --- 化学反応式問題 (equation) ---
-        else:
-            if st.session_state.level == "初級":
-                st.write("化学反応式の**係数（□に入る数字）**を入力してください。（1の場合は空欄可）")
-                left_inputs = []
-                cols_l = st.columns(len(q["left_sub"]) * 2)
-                for i in range(len(q["left_sub"])):
-                    with cols_l[i * 2]:
-                        val = st.text_input(f"左係数_{i}", key=f"l_c_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed", placeholder="係数")
-                        left_inputs.append(val.strip())
+        else:  # 上級編
+            st.write("各枠に適切な**化学式（係数含む）**を入力してください。")
+            correct_left = [(c if c != "1" else "") + s for c, s in zip(q["left_coef"], q["left_sub"])]
+            correct_right = [(c if c != "1" else "") + s for c, s in zip(q["right_coef"], q["right_sub"])]
+
+            left_inputs = []
+            cols_l = st.columns(len(q["left_sub"]) * 2 - 1)
+            for i in range(len(q["left_sub"])):
+                with cols_l[i * 2]:
+                    val = st.text_input(f"左_{i}", key=f"l_f_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed")
+                    left_inputs.append(val.strip())
+                if i < len(q["left_sub"]) - 1:
                     with cols_l[i * 2 + 1]:
-                        st.write(f"**{q['left_sub'][i]}**" + (" ＋ " if i < len(q["left_sub"]) - 1 else ""))
+                        st.markdown("### ＋")
 
-                st.markdown("### ➔")
+            st.markdown("### ➔")
 
-                right_inputs = []
-                cols_r = st.columns(len(q["right_sub"]) * 2)
-                for i in range(len(q["right_sub"])):
-                    with cols_r[i * 2]:
-                        val = st.text_input(f"右係数_{i}", key=f"r_c_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed", placeholder="係数")
-                        right_inputs.append(val.strip())
+            right_inputs = []
+            cols_r = st.columns(len(q["right_sub"]) * 2 - 1)
+            for i in range(len(q["right_sub"])):
+                with cols_r[i * 2]:
+                    val = st.text_input(f"右_{i}", key=f"r_f_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed")
+                    right_inputs.append(val.strip())
+                if i < len(q["right_sub"]) - 1:
                     with cols_r[i * 2 + 1]:
-                        st.write(f"**{q['right_sub'][i]}**" + (" ＋ " if i < len(q["right_sub"]) - 1 else ""))
+                        st.markdown("### ＋")
 
-                if st.button("答え合わせ", type="primary", disabled=st.session_state.answered):
-                    st.session_state.answered = True
-                    l_ans = [inp if inp != "" else "1" for inp in left_inputs]
-                    r_ans = [inp if inp != "" else "1" for inp in right_inputs]
-                    
-                    if l_ans == q["left_coef"] and r_ans == q["right_coef"]:
-                        st.success("🎉 正解です！試験管に液体が溜まりました！")
-                        st.session_state.score += 1
-                    else:
-                        st.error("❌ 不正解です。")
-                        l_str = " + ".join([(c if c!='1' else '') + s for c, s in zip(q['left_coef'], q['left_sub'])])
-                        r_str = " + ".join([(c if c!='1' else '') + s for c, s in zip(q['right_coef'], q['right_sub'])])
-                        st.info(f"💡 正解: **{l_str} ➔ {r_str}**")
-
-            else:  # 上級編
-                st.write("各枠に適切な**化学式（係数含む）**を入力してください。")
-                correct_left = [(c if c != "1" else "") + s for c, s in zip(q["left_coef"], q["left_sub"])]
-                correct_right = [(c if c != "1" else "") + s for c, s in zip(q["right_coef"], q["right_sub"])]
-
-                left_inputs = []
-                cols_l = st.columns(len(q["left_sub"]) * 2 - 1)
-                for i in range(len(q["left_sub"])):
-                    with cols_l[i * 2]:
-                        val = st.text_input(f"左_{i}", key=f"l_f_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed")
-                        left_inputs.append(val.strip())
-                    if i < len(q["left_sub"]) - 1:
-                        with cols_l[i * 2 + 1]:
-                            st.markdown("### ＋")
-
-                st.markdown("### ➔")
-
-                right_inputs = []
-                cols_r = st.columns(len(q["right_sub"]) * 2 - 1)
-                for i in range(len(q["right_sub"])):
-                    with cols_r[i * 2]:
-                        val = st.text_input(f"右_{i}", key=f"r_f_{q['id']}_{st.session_state.q_index}_{i}", label_visibility="collapsed")
-                        right_inputs.append(val.strip())
-                    if i < len(q["right_sub"]) - 1:
-                        with cols_r[i * 2 + 1]:
-                            st.markdown("### ＋")
-
-                if st.button("答え合わせ", type="primary", disabled=st.session_state.answered):
-                    st.session_state.answered = True
-                    if set(left_inputs) == set(correct_left) and set(right_inputs) == set(correct_right):
-                        st.success("🎉 正解です！試験管に液体が溜まりました！")
-                        st.session_state.score += 1
-                    else:
-                        st.error("❌ 不正解です。")
-                        st.info(f"💡 正解: **{' + '.join(correct_left)} ➔ {' + '.join(correct_right)}**")
-
-        # --- 次の問題進むロジック ---
-        if st.session_state.answered:
-            if st.button("次の問題へ ➔"):
-                st.session_state.answered = False
-                next_index = st.session_state.q_index + 1
-                if next_index >= len(q_list):
-                    st.session_state.shuffled_questions = random.sample(all_questions, len(all_questions))
-                    st.session_state.q_index = 0
+            if st.button("答え合わせ", type="primary", disabled=st.session_state.answered):
+                st.session_state.answered = True
+                if set(left_inputs) == set(correct_left) and set(right_inputs) == set(correct_right):
+                    st.success("🎉 正解です！試験管に液体が溜まりました！")
+                    st.session_state.score += 1
                 else:
-                    st.session_state.q_index = next_index
-                st.rerun()
+                    st.error("❌ 不正解です。")
+                    st.info(f"💡 正解: **{' + '.join(correct_left)} ➔ {' + '.join(correct_right)}**")
+
+    # --- 次の問題へ進むボタン ---
+    if st.session_state.answered:
+        if st.button("次の問題へ ➔"):
+            st.session_state.answered = False
+            st.session_state.q_start_time = time.time()  # ★タイマーをリセット
+            next_index = st.session_state.q_index + 1
+            if next_index >= len(q_list):
+                st.session_state.shuffled_questions = random.sample(all_questions, len(all_questions))
+                st.session_state.q_index = 0
+            else:
+                st.session_state.q_index = next_index
+            st.rerun()
