@@ -8,36 +8,45 @@ import os
 st.set_page_config(page_title="化学式・化学反応式クイズ", page_icon="🧪")
 
 # --------------------------------------------------
-# 背景動的設定関数（画面ごとに背景とスタイルを調整）
+# 背景動的設定関数（強力な白カード＆背景調整）
 # --------------------------------------------------
-def set_background(image_file):
+def set_background(image_file, is_title=False):
     if os.path.exists(image_file):
         with open(image_file, "rb") as f:
             data = f.read()
         b64_data = base64.b64encode(data).decode()
+        
+        # タイトル画面の場合は画像全体を綺麗に収め、ゲーム画面はカバー表示
+        bg_size = "contain" if is_title else "cover"
+        
         st.markdown(
             f"""
             <style>
+            /* 背景画像の設定 */
             .stApp {{
                 background-image: url("data:image/png;base64,{b64_data}");
-                background-size: cover;
-                background-position: center;
+                background-size: {bg_size};
+                background-position: top center;
                 background-repeat: no-repeat;
-                background-attachment: fixed;
+                background-color: #1a1a1a;
             }}
-            /* 中央カード部分：背景画像をしっかり隠して文字を見やすくする */
-            .main .block-container {{
-                background-color: rgba(255, 255, 255, 0.93) !important;
-                padding: 2.5rem !important;
-                border-radius: 20px !important;
-                margin-top: 3rem !important;
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
+            /* メイン枠（白カード）：背景を完全に遮断して視認性を確保 */
+            [data-testid="stMainBlockContainer"] {{
+                background-color: #ffffff !important;
+                padding: 2rem 2.5rem !important;
+                border-radius: 16px !important;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+                margin-top: 2rem !important;
+                margin-bottom: 2rem !important;
             }}
-            /* テキストカラーの強制適用 */
-            .main .block-container h1, .main .block-container h2, 
-            .main .block-container h3, .main .block-container p, 
-            .main .block-container span, .main .block-container label {{
-                color: #1e1e1e !important;
+            /* 文字色の強制的黒設定 */
+            [data-testid="stMainBlockContainer"] * {{
+                color: #222222 !important;
+            }}
+            /* ボタンテキストの視認性確保 */
+            .stButton > button {{
+                border-radius: 8px !important;
+                font-weight: bold !important;
             }}
             </style>
             """,
@@ -97,11 +106,11 @@ if "answered" not in st.session_state:
 # 画面1: オープニング画面
 # --------------------------------------------------
 if st.session_state.level is None:
-    set_background("title_bg.jpg")
+    set_background("title_bg.jpg", is_title=True)
 
-    # 画像内のタイトル用のスペース（余白）を確保
-    st.markdown("<div style='margin-top: 100px;'></div>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #333;'>コースを選択してください</h3>", unsafe_allow_html=True)
+    # タイトル文字が切れないよう、画像上部に大きなマージン（スペーサー）を配置
+    st.markdown("<div style='height: 220px;'></div>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>コースを選択してスタート！</h3>", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
@@ -112,7 +121,7 @@ if st.session_state.level is None:
             st.session_state.shuffled_questions = random.sample(all_questions, len(all_questions))
             st.session_state.q_index = 0
             st.session_state.score = 0
-            st.session_state.q_start_time = time.time()  # 1問目のタイマー開始
+            st.session_state.q_start_time = time.time()
             st.session_state.answered = False
             st.rerun()
             
@@ -123,7 +132,7 @@ if st.session_state.level is None:
             st.session_state.shuffled_questions = random.sample(all_questions, len(all_questions))
             st.session_state.q_index = 0
             st.session_state.score = 0
-            st.session_state.q_start_time = time.time()  # 1問目のタイマー開始
+            st.session_state.q_start_time = time.time()
             st.session_state.answered = False
             st.rerun()
 
@@ -131,23 +140,22 @@ if st.session_state.level is None:
 # 画面2: クイズ出題画面
 # --------------------------------------------------
 else:
-    set_background("game_bg.jpg")
+    set_background("game_bg.jpg", is_title=False)
 
-    # 1. サイドバー（途中退出ボタン）
+    # 1. サイドバー
     st.sidebar.markdown(f"### コース: {st.session_state.level}編")
     if st.sidebar.button("🚪 途中退出（タイトルへ）", use_container_width=True):
         st.session_state.level = None
         st.rerun()
 
-    # 2. 1問あたりの制限時間計算
+    # 2. 残り時間の動的計算
     elapsed_time = time.time() - st.session_state.q_start_time
     remaining_time = max(0, int(st.session_state.time_limit - elapsed_time))
 
-    # 3. 試験管メーター（プログレスバー）計算
+    # 3. 試験管メーター計算
     total_q_count = len(st.session_state.shuffled_questions)
     gauge_ratio = (st.session_state.score % total_q_count) / total_q_count if total_q_count > 0 else 0.0
 
-    # 上部インフォメーション表示
     col_t1, col_t2 = st.columns([1, 1])
     with col_t1:
         st.metric(label="⏱ この問題の残り時間", value=f"{remaining_time} 秒")
@@ -162,12 +170,12 @@ else:
 
     st.subheader(f"問題 {st.session_state.q_index + 1}: {q['title']}")
 
-    # 4. 時間切れ判定（この問の制限時間が切れた場合）
+    # 4. 時間切れ判定
     if remaining_time <= 0 and not st.session_state.answered:
         st.session_state.answered = True
-        st.error("⏰ 時間切れ！次の問題に進みましょう。")
+        st.error("⏰ 時間切れです！「次の問題へ」を押してください。")
 
-    # 5. 問題の表示処理
+    # 5. 問題フォーム
     if q["type"] == "single":
         st.write("該当する化学式を入力してください。")
         user_input = st.text_input("解答欄", key=f"single_{q['id']}_{st.session_state.q_index}").strip()
@@ -253,11 +261,11 @@ else:
                     st.error("❌ 不正解です。")
                     st.info(f"💡 正解: **{' + '.join(correct_left)} ➔ {' + '.join(correct_right)}**")
 
-    # --- 次の問題へ進むボタン ---
+    # --- 次の問題進むボタン ---
     if st.session_state.answered:
         if st.button("次の問題へ ➔"):
             st.session_state.answered = False
-            st.session_state.q_start_time = time.time()  # ★タイマーをリセット
+            st.session_state.q_start_time = time.time()
             next_index = st.session_state.q_index + 1
             if next_index >= len(q_list):
                 st.session_state.shuffled_questions = random.sample(all_questions, len(all_questions))
@@ -265,3 +273,8 @@ else:
             else:
                 st.session_state.q_index = next_index
             st.rerun()
+
+    # ★ 6. タイマーリアルタイム更新（未解答で時間が残っている場合のみ1秒おきに画面更新）
+    if not st.session_state.answered and remaining_time > 0:
+        time.sleep(1)
+        st.rerun()
