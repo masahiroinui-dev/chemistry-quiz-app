@@ -8,7 +8,7 @@ import os
 st.set_page_config(page_title="化学式・化学反応式クイズ", page_icon="🧪")
 
 # --------------------------------------------------
-# 背景動的設定関数（透過シート＆レイアウト調整）
+# 背景動的設定関数（最上部ヘッダー透明化＆背景透過）
 # --------------------------------------------------
 def set_background(image_file, is_title=False):
     if os.path.exists(image_file):
@@ -16,21 +16,27 @@ def set_background(image_file, is_title=False):
             data = f.read()
         b64_data = base64.b64encode(data).decode()
         
-        # タイトル画像の上部余白（ロゴ表示用）
-        top_margin = "220px" if is_title else "100px"
+        # タイトル画面の場合はカード位置を下げてロゴを露出
+        top_margin = "200px" if is_title else "80px"
         
         st.markdown(
             f"""
             <style>
-            /* 背景画像の設定 */
+            /* Streamlitの最上部ヘッダー帯を完全透明化 */
+            header[data-testid="stHeader"] {{
+                background-color: transparent !important;
+            }}
+            
+            /* アプリ全体の最上部背景を透明にして画像を上端まで全面表示 */
             .stApp {{
                 background-image: url("data:image/png;base64,{b64_data}");
                 background-size: cover;
                 background-position: top center;
                 background-repeat: no-repeat;
                 background-attachment: fixed;
-                background-color: #1a1a1a;
+                background-color: transparent !important;
             }}
+            
             /* 中央メインカード：適度な透過性(0.85)とサイズの最適化 */
             [data-testid="stMainBlockContainer"] {{
                 background-color: rgba(255, 255, 255, 0.85) !important;
@@ -39,15 +45,17 @@ def set_background(image_file, is_title=False):
                 box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
                 margin-top: {top_margin} !important;
                 margin-bottom: 2rem !important;
-                max-width: 800px !important; /* 大きすぎないよう横幅を制限 */
-                backdrop-filter: blur(4px); /* 背景を微うっすらぼかして可読性アップ */
+                max-width: 750px !important;
+                backdrop-filter: blur(4px);
             }}
-            /* テキストカラーとくっきり見せるシャドウ */
+            
+            /* テキストカラーとドロップシャドウ */
             [data-testid="stMainBlockContainer"] * {{
                 color: #111111 !important;
                 text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
             }}
-            /* ボタンデザインの微調整 */
+            
+            /* ボタンデザイン */
             .stButton > button {{
                 border-radius: 8px !important;
                 font-weight: bold !important;
