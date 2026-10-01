@@ -8,7 +8,7 @@ import os
 st.set_page_config(page_title="化学式・化学反応式クイズ", page_icon="🧪")
 
 # --------------------------------------------------
-# 背景動的設定関数（強力な白カード＆背景調整）
+# 背景動的設定関数（透過シート＆レイアウト調整）
 # --------------------------------------------------
 def set_background(image_file, is_title=False):
     if os.path.exists(image_file):
@@ -16,8 +16,8 @@ def set_background(image_file, is_title=False):
             data = f.read()
         b64_data = base64.b64encode(data).decode()
         
-        # タイトル画面の場合は画像全体を綺麗に収め、ゲーム画面はカバー表示
-        bg_size = "contain" if is_title else "cover"
+        # タイトル画像の上部余白（ロゴ表示用）
+        top_margin = "220px" if is_title else "100px"
         
         st.markdown(
             f"""
@@ -25,28 +25,33 @@ def set_background(image_file, is_title=False):
             /* 背景画像の設定 */
             .stApp {{
                 background-image: url("data:image/png;base64,{b64_data}");
-                background-size: {bg_size};
+                background-size: cover;
                 background-position: top center;
                 background-repeat: no-repeat;
+                background-attachment: fixed;
                 background-color: #1a1a1a;
             }}
-            /* メイン枠（白カード）：背景を完全に遮断して視認性を確保 */
+            /* 中央メインカード：適度な透過性(0.85)とサイズの最適化 */
             [data-testid="stMainBlockContainer"] {{
-                background-color: #ffffff !important;
+                background-color: rgba(255, 255, 255, 0.85) !important;
                 padding: 2rem 2.5rem !important;
                 border-radius: 16px !important;
-                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
-                margin-top: 2rem !important;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+                margin-top: {top_margin} !important;
                 margin-bottom: 2rem !important;
+                max-width: 800px !important; /* 大きすぎないよう横幅を制限 */
+                backdrop-filter: blur(4px); /* 背景を微うっすらぼかして可読性アップ */
             }}
-            /* 文字色の強制的黒設定 */
+            /* テキストカラーとくっきり見せるシャドウ */
             [data-testid="stMainBlockContainer"] * {{
-                color: #222222 !important;
+                color: #111111 !important;
+                text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
             }}
-            /* ボタンテキストの視認性確保 */
+            /* ボタンデザインの微調整 */
             .stButton > button {{
                 border-radius: 8px !important;
                 font-weight: bold !important;
+                background-color: rgba(255, 255, 255, 0.9) !important;
             }}
             </style>
             """,
@@ -108,9 +113,7 @@ if "answered" not in st.session_state:
 if st.session_state.level is None:
     set_background("title_bg.jpg", is_title=True)
 
-    # タイトル文字が切れないよう、画像上部に大きなマージン（スペーサー）を配置
-    st.markdown("<div style='height: 220px;'></div>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center;'>コースを選択してスタート！</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; margin-bottom: 1.5rem;'>コースを選択してスタート！</h3>", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
@@ -148,7 +151,7 @@ else:
         st.session_state.level = None
         st.rerun()
 
-    # 2. 残り時間の動的計算
+    # 2. 残り時間の計算
     elapsed_time = time.time() - st.session_state.q_start_time
     remaining_time = max(0, int(st.session_state.time_limit - elapsed_time))
 
@@ -274,7 +277,7 @@ else:
                 st.session_state.q_index = next_index
             st.rerun()
 
-    # ★ 6. タイマーリアルタイム更新（未解答で時間が残っている場合のみ1秒おきに画面更新）
+    # 6. タイマーリアルタイム更新
     if not st.session_state.answered and remaining_time > 0:
         time.sleep(1)
         st.rerun()
